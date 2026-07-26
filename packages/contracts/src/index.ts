@@ -17,13 +17,11 @@ export const priceRequestSchema = z.object({
   sku: z.string().trim().min(1).max(100),
   quantity: z.number().int().positive().max(1_000_000),
   currency: z.string().regex(/^[A-Z]{3}$/),
-  organizationId: tenantIdSchema,
   buyerGroupIds: z.array(z.string().uuid()).default([]),
   at: z.coerce.date().default(() => new Date()),
 });
 
 export const createOrderSchema = z.object({
-  organizationId: tenantIdSchema,
   purchaseOrderNumber: z.string().trim().max(80).optional(),
   idempotencyKey: z.string().min(16).max(128),
   lines: z
@@ -37,9 +35,25 @@ export const createOrderSchema = z.object({
     .max(500),
 });
 
+export const inviteOrganizationMemberSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  roleIds: z.array(z.string().uuid()).min(1).max(20),
+  branchIds: z.array(z.string().uuid()).max(100).default([]),
+  departmentIds: z.array(z.string().uuid()).max(100).default([]),
+  expiresInHours: z.number().int().min(1).max(168).default(72),
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(32).max(512),
+});
+
 export type CreateOrganization = z.infer<typeof createOrganizationSchema>;
 export type PriceRequest = z.infer<typeof priceRequestSchema>;
 export type CreateOrder = z.infer<typeof createOrderSchema>;
+export type InviteOrganizationMember = z.infer<
+  typeof inviteOrganizationMemberSchema
+>;
+export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
 
 export interface ApiError {
   type: string;

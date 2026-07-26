@@ -1,7 +1,7 @@
 name: b2b-platform
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.10-alpine
     environment:
       POSTGRES_USER: b2b
       POSTGRES_PASSWORD: b2b_local_only
@@ -16,7 +16,7 @@ services:
       timeout: 3s
       retries: 10
   redis:
-    image: redis:7.4-alpine
+    image: redis:8.8-alpine
     command:
       [
         "redis-server",

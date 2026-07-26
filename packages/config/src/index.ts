@@ -11,6 +11,7 @@ const environmentSchema = z.object({
   OPENSEARCH_URL: z.string().url(),
   JWT_ISSUER: z.string().url(),
   JWT_AUDIENCE: z.string().min(1),
+  JWT_JWKS_URL: z.string().url().optional(),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),

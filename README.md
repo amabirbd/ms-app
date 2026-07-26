@@ -25,5 +25,9 @@ The API is available at `http://localhost:4000/api/v1`, Swagger at
 `http://localhost:4000/docs`, and the customer web application at
 `http://localhost:3000`.
 
+All business endpoints require a short-lived JWT issued by the configured OIDC
+provider. The token must contain `sub`, `email`, `permissions`, and—when acting
+inside an organization—`org_id`. Client-supplied tenant identifiers are ignored.
+
 See [the local development guide](docs/operations/local-development.md) and
 [architecture document](docs/architecture/platform.md).

@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
 
 CREATE SCHEMA IF NOT EXISTS organization;
 CREATE SCHEMA IF NOT EXISTS catalog;
@@ -18,6 +19,101 @@ CREATE TABLE organization.organizations (
   deleted_at timestamptz,
   CONSTRAINT organizations_legal_name_active_key UNIQUE NULLS NOT DISTINCT (legal_name, deleted_at)
 );
+
+CREATE TABLE organization.users (
+  id uuid PRIMARY KEY,
+  email citext NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  status text NOT NULL CHECK (status IN ('active', 'locked', 'disabled')),
+  last_login_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE organization.roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES organization.organizations(id),
+  name text NOT NULL,
+  description text NOT NULL,
+  is_system boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+CREATE UNIQUE INDEX roles_name_scope_key
+  ON organization.roles (coalesce(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name))
+  WHERE deleted_at IS NULL;
+
+CREATE TABLE organization.permissions (
+  code text PRIMARY KEY,
+  description text NOT NULL,
+  risk_level text NOT NULL CHECK (risk_level IN ('low', 'moderate', 'high', 'critical'))
+);
+
+CREATE TABLE organization.role_permissions (
+  role_id uuid NOT NULL REFERENCES organization.roles(id) ON DELETE CASCADE,
+  permission_code text NOT NULL REFERENCES organization.permissions(code) ON DELETE RESTRICT,
+  PRIMARY KEY (role_id, permission_code)
+);
+
+CREATE TABLE organization.members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES organization.organizations(id),
+  user_id uuid NOT NULL REFERENCES organization.users(id),
+  status text NOT NULL CHECK (status IN ('active', 'suspended', 'removed')),
+  version integer NOT NULL DEFAULT 1,
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, user_id)
+);
+CREATE INDEX members_tenant_status_idx ON organization.members (tenant_id, status);
+
+CREATE TABLE organization.member_roles (
+  tenant_id uuid NOT NULL,
+  member_id uuid NOT NULL REFERENCES organization.members(id) ON DELETE CASCADE,
+  role_id uuid NOT NULL REFERENCES organization.roles(id) ON DELETE RESTRICT,
+  assigned_by uuid NOT NULL REFERENCES organization.users(id),
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (member_id, role_id)
+);
+CREATE INDEX member_roles_tenant_idx ON organization.member_roles (tenant_id, member_id);
+
+CREATE TABLE organization.invitations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES organization.organizations(id),
+  email citext NOT NULL,
+  token_hash char(64) NOT NULL UNIQUE,
+  role_ids uuid[] NOT NULL CHECK (cardinality(role_ids) > 0),
+  branch_ids uuid[] NOT NULL DEFAULT '{}',
+  department_ids uuid[] NOT NULL DEFAULT '{}',
+  status text NOT NULL CHECK (status IN ('pending', 'accepted', 'revoked')),
+  invited_by uuid NOT NULL REFERENCES organization.users(id),
+  expires_at timestamptz NOT NULL,
+  accepted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (expires_at > created_at)
+);
+CREATE UNIQUE INDEX invitations_pending_email_key
+  ON organization.invitations (tenant_id, lower(email::text))
+  WHERE status = 'pending';
+
+CREATE TABLE platform.audit_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  actor_id uuid,
+  action text NOT NULL,
+  resource_type text NOT NULL,
+  resource_id text NOT NULL,
+  outcome text NOT NULL CHECK (outcome IN ('success', 'denied', 'failure')),
+  request_id uuid,
+  correlation_id uuid,
+  source_ip inet,
+  user_agent text,
+  metadata jsonb NOT NULL DEFAULT '{}',
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (id, occurred_at)
+) PARTITION BY RANGE (occurred_at);
+CREATE TABLE platform.audit_log_default PARTITION OF platform.audit_log DEFAULT;
+CREATE INDEX audit_log_tenant_time_idx ON platform.audit_log (tenant_id, occurred_at DESC);
 
 CREATE TABLE catalog.products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,12 +192,32 @@ CREATE TABLE platform.outbox (
 CREATE INDEX outbox_unpublished_idx ON platform.outbox (occurred_at) WHERE published_at IS NULL;
 
 ALTER TABLE catalog.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization.members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization.member_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization.invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform.audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing.price_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ordering.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform.idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform.outbox ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY products_tenant_isolation ON catalog.products
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY roles_tenant_isolation ON organization.roles
+  USING (tenant_id IS NULL OR tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY members_tenant_isolation ON organization.members
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY member_roles_tenant_isolation ON organization.member_roles
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY invitations_tenant_isolation ON organization.invitations
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY audit_log_tenant_isolation ON platform.audit_log
   USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 CREATE POLICY prices_tenant_isolation ON pricing.price_rules

@@ -5,6 +5,7 @@ import {
   type CreateOrganization,
 } from "@b2b/contracts";
 import { ZodValidationPipe } from "../platform/zod-validation.pipe";
+import { RequirePermissions } from "../auth/auth.decorators";
 import { OrganizationService, type Organization } from "./organization.service";
 
 @ApiTags("organizations")
@@ -14,6 +15,7 @@ export class OrganizationController {
   constructor(private readonly organizations: OrganizationService) {}
 
   @Post()
+  @RequirePermissions("organization:create")
   create(
     @Body(new ZodValidationPipe(createOrganizationSchema))
     command: CreateOrganization,

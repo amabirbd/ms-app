@@ -361,6 +361,9 @@ fault injection proves retries, idempotency, and compensation.
 7. Customer, admin, and mobile workflow completion.
 8. Load/security/accessibility/DR hardening and regional readiness.
 
+Phase 4 identity and organization work is tracked in
+`docs/architecture/phase-4-identity-organization.md`.
+
 # Appendix: failure policy
 
 Retries apply only to transient, idempotent operations with exponential backoff

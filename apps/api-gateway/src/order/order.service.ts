@@ -16,7 +16,7 @@ export class OrderService {
     { fingerprint: string; receipt: OrderReceipt }
   >();
 
-  submit(command: CreateOrder): OrderReceipt {
+  submit(command: CreateOrder & { organizationId: string }): OrderReceipt {
     const fingerprint = JSON.stringify(command);
     const existing = this.receiptsByIdempotencyKey.get(command.idempotencyKey);
     if (existing) {
