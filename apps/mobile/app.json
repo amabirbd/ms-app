@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Meridian Buyer",
+    "slug": "meridian-buyer",
+    "scheme": "meridian",
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": true },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.meridianbuyer"
+    },
+    "android": { "package": "com.example.meridianbuyer" }
+  }
+}

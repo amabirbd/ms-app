@@ -1,0 +1,27 @@
+{
+  "name": "@b2b/platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format:check": "prettier --check .",
+    "infra:up": "docker compose up -d postgres redis kafka opensearch",
+    "infra:down": "docker compose down",
+    "docs:pdf": "docker run --rm -v ${PWD}:/data pandoc/extra docs/architecture/platform.md -o build/b2b-platform-architecture.pdf --toc --number-sections --pdf-engine=xelatex"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.5",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

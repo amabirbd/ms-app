@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  labels: { app.kubernetes.io/name: api-gateway }
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: api-gateway }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: api-gateway }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api-gateway
+          image: REPLACED_BY_GITOPS
+          ports: [{ name: http, containerPort: 4000 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            httpGet: { path: /api/v1/health/ready, port: http }
+          livenessProbe:
+            httpGet: { path: /api/v1/health/live, port: http }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { cpu: "1", memory: 768Mi }
+          envFrom:
+            - secretRef: { name: api-gateway-runtime }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api-gateway }
+  minReplicas: 3
+  maxReplicas: 50
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 65 }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app.kubernetes.io/name: api-gateway }
